@@ -1,314 +1,382 @@
-// Load environment variables only in development
-if (process.env.NODE_ENV !== 'production') {
-  require('dotenv').config({ path: '.env.local' });
-}
-const express = require('express');
-const { kv } = require('@vercel/kv');
-const { nanoid } = require('nanoid');
-const path = require('path');
-
-const app = express();
-
-// Helper function to safely parse KV data
-function parseKvData(data) {
-  if (typeof data === 'string') {
-    return JSON.parse(data);
-  }
-  return data;
-}
-
-// Middleware
-app.use(express.json());
-app.use(express.static(path.join(__dirname, '../public')));
-
-// Middleware to handle TEST_MODE timing
-app.use((req, res, next) => {
-  if (process.env.TEST_MODE === '1' && req.headers['x-test-now-ms']) {
-    req.testNowMs = parseInt(req.headers['x-test-now-ms'], 10);
-  } else {
-    req.testNowMs = Date.now();
-  }
-  next();
-});
-
-// Health check endpoint
-app.get('/api/healthz', async (req, res) => {
-  try {
-    // Try to ping KV to ensure persistence layer is accessible
-    await kv.ping();
-    res.json({ ok: true });
-  } catch (error) {
-    console.error('Health check failed:', error);
-    res.status(500).json({ ok: false });
-  }
-});
-
-// Create a paste
-app.post('/api/pastes', async (req, res) => {
-  const { content, ttl_seconds, max_views } = req.body;
-
-  // Validation
-  if (!content || typeof content !== 'string' || content.trim() === '') {
-    return res.status(400).json({ error: 'content is required and must be a non-empty string' });
-  }
-
-  if (ttl_seconds !== undefined && (!Number.isInteger(ttl_seconds) || ttl_seconds < 1)) {
-    return res.status(400).json({ error: 'ttl_seconds must be an integer >= 1' });
-  }
-
-  if (max_views !== undefined && (!Number.isInteger(max_views) || max_views < 1)) {
-    return res.status(400).json({ error: 'max_views must be an integer >= 1' });
-  }
-
-  try {
-    const id = nanoid(10);
-    const now = req.testNowMs;
-
-    const pasteData = {
-      content,
-      created_at: now,
-      views_count: 0,
-      max_views: max_views || null,
-      expires_at: ttl_seconds ? now + ttl_seconds * 1000 : null,
-    };
-
-    // Store in KV with TTL if specified
-    if (ttl_seconds) {
-      await kv.set(`paste:${id}`, JSON.stringify(pasteData), { ex: ttl_seconds });
-    } else {
-      await kv.set(`paste:${id}`, JSON.stringify(pasteData));
+export default function handler(req, res) {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pastebin - Share Your Text</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
     }
 
-    const appUrl = process.env.VERCEL_URL 
-      ? `https://${process.env.VERCEL_URL}`
-      : `http://localhost:3000`;
-
-    res.status(201).json({
-      id,
-      url: `${appUrl}/p/${id}`,
-    });
-  } catch (error) {
-    console.error('Error creating paste:', error);
-    res.status(500).json({ error: 'Failed to create paste' });
-  }
-});
-
-// Fetch a paste (API)
-app.get('/api/pastes/:id', async (req, res) => {
-  const { id } = req.params;
-
-  try {
-    const pasteJson = await kv.get(`paste:${id}`);
-
-    if (!pasteJson) {
-      return res.status(404).json({ error: 'Paste not found' });
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+        sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
     }
 
-    const paste = parseKvData(pasteJson);
-    const now = req.testNowMs;
-
-    // Check if expired
-    if (paste.expires_at && now > paste.expires_at) {
-      await kv.del(`paste:${id}`);
-      return res.status(404).json({ error: 'Paste has expired' });
+    .container {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      max-width: 600px;
+      width: 100%;
+      padding: 40px;
     }
 
-    // Check if view limit exceeded
-    if (paste.max_views && paste.views_count >= paste.max_views) {
-      await kv.del(`paste:${id}`);
-      return res.status(404).json({ error: 'View limit exceeded' });
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
     }
 
-    // Increment view count
-    paste.views_count += 1;
-    const remaining_views = paste.max_views ? paste.max_views - paste.views_count : null;
-
-    // Update in KV
-    if (paste.expires_at) {
-      const ttl = Math.ceil((paste.expires_at - now) / 1000);
-      if (ttl > 0) {
-        await kv.set(`paste:${id}`, JSON.stringify(paste), { ex: ttl });
-      }
-    } else {
-      await kv.set(`paste:${id}`, JSON.stringify(paste));
+    .subtitle {
+      color: #999;
+      margin-bottom: 30px;
+      font-size: 14px;
     }
 
-    res.json({
-      content: paste.content,
-      remaining_views,
-      expires_at: paste.expires_at ? new Date(paste.expires_at).toISOString() : null,
-    });
-  } catch (error) {
-    console.error('Error fetching paste:', error);
-    res.status(500).json({ error: 'Failed to fetch paste' });
-  }
-});
-
-// View a paste (HTML)
-app.get('/p/:id', async (req, res) => {
-  const { id } = req.params;
-
-  try {
-    const pasteJson = await kv.get(`paste:${id}`);
-
-    if (!pasteJson) {
-      return res.status(404).send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Paste Not Found</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 40px; }
-            .error { color: #d32f2f; }
-          </style>
-        </head>
-        <body>
-          <h1 class="error">Paste Not Found</h1>
-          <p>This paste does not exist or has expired.</p>
-          <a href="/">Create a new paste</a>
-        </body>
-        </html>
-      `);
+    .form-group {
+      margin-bottom: 20px;
     }
 
-    const paste = parseKvData(pasteJson);
-    const now = req.testNowMs;
-
-    // Check if expired
-    if (paste.expires_at && now > paste.expires_at) {
-      await kv.del(`paste:${id}`);
-      return res.status(404).send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Paste Expired</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 40px; }
-            .error { color: #d32f2f; }
-          </style>
-        </head>
-        <body>
-          <h1 class="error">Paste Expired</h1>
-          <p>This paste has expired and is no longer available.</p>
-          <a href="/">Create a new paste</a>
-        </body>
-        </html>
-      `);
+    label {
+      display: block;
+      color: #333;
+      font-weight: 500;
+      margin-bottom: 8px;
+      font-size: 14px;
     }
 
-    // Check if view limit exceeded
-    if (paste.max_views && paste.views_count >= paste.max_views) {
-      await kv.del(`paste:${id}`);
-      return res.status(404).send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>View Limit Exceeded</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 40px; }
-            .error { color: #d32f2f; }
-          </style>
-        </head>
-        <body>
-          <h1 class="error">View Limit Exceeded</h1>
-          <p>This paste has reached its view limit.</p>
-          <a href="/">Create a new paste</a>
-        </body>
-        </html>
-      `);
+    textarea {
+      width: 100%;
+      min-height: 250px;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      resize: vertical;
+      border-color: #ddd;
+      transition: border-color 0.3s;
     }
 
-    // Increment view count
-    paste.views_count += 1;
-
-    // Update in KV
-    if (paste.expires_at) {
-      const ttl = Math.ceil((paste.expires_at - now) / 1000);
-      if (ttl > 0) {
-        await kv.set(`paste:${id}`, JSON.stringify(paste), { ex: ttl });
-      }
-    } else {
-      await kv.set(`paste:${id}`, JSON.stringify(paste));
+    textarea:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
     }
 
-    // Escape HTML content for safe rendering
-    const escapedContent = String(paste.content)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#x27;');
+    .options-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
 
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Paste Viewer</title>
-        <style>
-          body { font-family: Arial, sans-serif; margin: 40px; }
-          .container { max-width: 800px; }
-          .paste-content { 
-            background: #f5f5f5; 
-            padding: 15px; 
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            font-family: 'Courier New', monospace;
-            overflow-x: auto;
-          }
-          .info { color: #666; font-size: 0.9em; margin-top: 10px; }
-          a { color: #1976d2; text-decoration: none; }
-          a:hover { text-decoration: underline; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <h1>Paste Content</h1>
-          <div class="paste-content">${escapedContent}</div>
-          <div class="info">
-            <p>Views remaining: ${paste.max_views ? paste.max_views - paste.views_count : 'Unlimited'}</p>
-            ${paste.expires_at ? `<p>Expires at: ${new Date(paste.expires_at).toISOString()}</p>` : ''}
-          </div>
-          <a href="/">Create a new paste</a>
+    .option-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    input[type="number"] {
+      flex: 1;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    input[type="number"]:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+    }
+
+    button {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 4px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+
+    .result {
+      display: none;
+      margin-top: 30px;
+      padding: 20px;
+      background: #f0f8ff;
+      border-left: 4px solid #667eea;
+      border-radius: 4px;
+    }
+
+    .result.show {
+      display: block;
+    }
+
+    .result h3 {
+      color: #333;
+      margin-bottom: 15px;
+      font-size: 18px;
+    }
+
+    .url-box {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .url-box input {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      background: white;
+      font-family: 'Courier New', monospace;
+    }
+
+    .url-box button {
+      padding: 10px 15px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .url-box button:hover {
+      background: #764ba2;
+    }
+
+    .success-message {
+      color: #2e7d32;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+
+    .error {
+      color: #d32f2f;
+      font-size: 14px;
+      margin-top: 10px;
+      padding: 10px;
+      background: #ffebee;
+      border-radius: 4px;
+      display: none;
+    }
+
+    .error.show {
+      display: block;
+    }
+
+    .loading {
+      display: none;
+      text-align: center;
+      color: #667eea;
+    }
+
+    .loading.show {
+      display: block;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .info-text {
+      font-size: 12px;
+      color: #999;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📝 Pastebin</h1>
+    <p class="subtitle">Create and share your text pastes</p>
+
+    <form id="pasteForm">
+      <div class="form-group">
+        <label for="content">Paste Content</label>
+        <textarea
+          id="content"
+          placeholder="Enter your text here..."
+          required
+        ></textarea>
+      </div>
+
+      <div class="options-grid">
+        <div class="option-group">
+          <label for="ttl" style="margin: 0;">TTL (seconds)</label>
+          <input
+            type="number"
+            id="ttl"
+            min="1"
+            placeholder="Optional"
+          />
+          <div class="info-text">Optional: Auto-expire</div>
         </div>
-      </body>
-      </html>
-    `);
-  } catch (error) {
-    console.error('Error viewing paste:', error);
-    res.status(500).send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Error</title>
-        <style>
-          body { font-family: Arial, sans-serif; margin: 40px; }
-          .error { color: #d32f2f; }
-        </style>
-      </head>
-      <body>
-        <h1 class="error">Error</h1>
-        <p>An error occurred while retrieving the paste.</p>
-        <a href="/">Go back</a>
-      </body>
-      </html>
-    `);
-  }
-});
 
-// Serve index.html for root route
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/index.html'));
-});
+        <div class="option-group">
+          <label for="maxViews" style="margin: 0;">Max Views</label>
+          <input
+            type="number"
+            id="maxViews"
+            min="1"
+            placeholder="Optional"
+          />
+          <div class="info-text">Optional: View limit</div>
+        </div>
+      </div>
 
-// For Vercel serverless
-module.exports = app;
+      <div class="button-group">
+        <button type="submit" class="btn-primary">Create Paste</button>
+        <button type="reset" class="btn-secondary">Clear</button>
+      </div>
 
-// Only listen locally
-if (!process.env.VERCEL) {
-  const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-  });
+      <div class="loading" id="loading">
+        <span class="spinner"></span>
+        Creating paste...
+      </div>
+
+      <div class="error" id="error"></div>
+    </form>
+
+    <div class="result" id="result">
+      <h3>✅ Paste Created Successfully!</h3>
+      <div class="url-box">
+        <input type="text" id="shareUrl" readonly />
+        <button onclick="copyToClipboard()">Copy</button>
+      </div>
+      <p class="success-message" id="copyMessage"></p>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('pasteForm');
+    const content = document.getElementById('content');
+    const ttl = document.getElementById('ttl');
+    const maxViews = document.getElementById('maxViews');
+    const loading = document.getElementById('loading');
+    const error = document.getElementById('error');
+    const result = document.getElementById('result');
+    const shareUrl = document.getElementById('shareUrl');
+    const copyMessage = document.getElementById('copyMessage');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      // Clear previous messages
+      error.classList.remove('show');
+      result.classList.remove('show');
+      copyMessage.textContent = '';
+      loading.classList.add('show');
+
+      try {
+        const payload = {
+          content: content.value,
+        };
+
+        if (ttl.value) {
+          payload.ttl_seconds = parseInt(ttl.value, 10);
+        }
+
+        if (maxViews.value) {
+          payload.max_views = parseInt(maxViews.value, 10);
+        }
+
+        const response = await fetch('/api/pastes', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        loading.classList.remove('show');
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to create paste');
+        }
+
+        const data = await response.json();
+        shareUrl.value = data.url;
+        result.classList.add('show');
+
+        // Reset form
+        form.reset();
+      } catch (err) {
+        loading.classList.remove('show');
+        error.textContent = err.message;
+        error.classList.add('show');
+      }
+    });
+
+    function copyToClipboard() {
+      shareUrl.select();
+      document.execCommand('copy');
+      copyMessage.textContent = '✓ Copied to clipboard!';
+      setTimeout(() => {
+        copyMessage.textContent = '';
+      }, 2000);
+    }
+  </script>
+</body>
+</html>`);
 }
