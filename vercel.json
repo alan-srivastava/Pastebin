@@ -3,7 +3,10 @@
   "builds": [
     {
       "src": "src/index.js",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": {
+        "zeroConfig": true
+      }
     }
   ],
   "routes": [
@@ -11,5 +14,9 @@
       "src": "/(.*)",
       "dest": "src/index.js"
     }
-  ]
+  ],
+  "env": {
+    "KV_REST_API_URL": "@kv_rest_api_url",
+    "KV_REST_API_TOKEN": "@kv_rest_api_token"
+  }
 }
