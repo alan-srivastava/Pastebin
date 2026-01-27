@@ -7,7 +7,7 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Helper function to safely parse KV data
+
 function parseKvData(data) {
   if (typeof data === 'string') {
     return JSON.parse(data);
@@ -15,20 +15,20 @@ function parseKvData(data) {
   return data;
 }
 
-// Middleware
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Helper function to get current time
+
 function getCurrentTime() {
   if (process.env.TEST_MODE === '1') {
-    // This will be populated from request headers
-    return null; // Will be handled in middleware
+  
+    return null; 
   }
   return Date.now();
 }
 
-// Middleware to handle TEST_MODE timing
+
 app.use((req, res, next) => {
   if (process.env.TEST_MODE === '1' && req.headers['x-test-now-ms']) {
     req.testNowMs = parseInt(req.headers['x-test-now-ms'], 10);
@@ -38,10 +38,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check endpoint
+
 app.get('/api/healthz', async (req, res) => {
   try {
-    // Try to ping KV to ensure persistence layer is accessible
+    
     await kv.ping();
     res.json({ ok: true });
   } catch (error) {
@@ -50,11 +50,11 @@ app.get('/api/healthz', async (req, res) => {
   }
 });
 
-// Create a paste
+
 app.post('/api/pastes', async (req, res) => {
   const { content, ttl_seconds, max_views } = req.body;
 
-  // Validation
+
   if (!content || typeof content !== 'string' || content.trim() === '') {
     return res.status(400).json({ error: 'content is required and must be a non-empty string' });
   }
@@ -79,7 +79,7 @@ app.post('/api/pastes', async (req, res) => {
       expires_at: ttl_seconds ? now + ttl_seconds * 1000 : null,
     };
 
-    // Store in KV with TTL if specified
+   
     if (ttl_seconds) {
       await kv.set(`paste:${id}`, JSON.stringify(pasteData), { ex: ttl_seconds });
     } else {
@@ -100,7 +100,7 @@ app.post('/api/pastes', async (req, res) => {
   }
 });
 
-// Fetch a paste (API)
+
 app.get('/api/pastes/:id', async (req, res) => {
   const { id } = req.params;
 
@@ -114,23 +114,23 @@ app.get('/api/pastes/:id', async (req, res) => {
     const paste = parseKvData(pasteJson);
     const now = req.testNowMs;
 
-    // Check if expired
+    
     if (paste.expires_at && now > paste.expires_at) {
       await kv.del(`paste:${id}`);
       return res.status(404).json({ error: 'Paste has expired' });
     }
 
-    // Check if view limit exceeded
+    
     if (paste.max_views && paste.views_count >= paste.max_views) {
       await kv.del(`paste:${id}`);
       return res.status(404).json({ error: 'View limit exceeded' });
     }
 
-    // Increment view count
+    
     paste.views_count += 1;
     const remaining_views = paste.max_views ? paste.max_views - paste.views_count : null;
 
-    // Update in KV
+   
     if (paste.expires_at) {
       const ttl = Math.ceil((paste.expires_at - now) / 1000);
       if (ttl > 0) {
@@ -151,7 +151,7 @@ app.get('/api/pastes/:id', async (req, res) => {
   }
 });
 
-// View a paste (HTML)
+
 app.get('/p/:id', async (req, res) => {
   const { id } = req.params;
 
@@ -181,7 +181,7 @@ app.get('/p/:id', async (req, res) => {
     const paste = parseKvData(pasteJson);
     const now = req.testNowMs;
 
-    // Check if expired
+   
     if (paste.expires_at && now > paste.expires_at) {
       await kv.del(`paste:${id}`);
       return res.status(404).send(`
@@ -203,7 +203,7 @@ app.get('/p/:id', async (req, res) => {
       `);
     }
 
-    // Check if view limit exceeded
+    
     if (paste.max_views && paste.views_count >= paste.max_views) {
       await kv.del(`paste:${id}`);
       return res.status(404).send(`
@@ -225,10 +225,10 @@ app.get('/p/:id', async (req, res) => {
       `);
     }
 
-    // Increment view count
+    
     paste.views_count += 1;
 
-    // Update in KV
+    
     if (paste.expires_at) {
       const ttl = Math.ceil((paste.expires_at - now) / 1000);
       if (ttl > 0) {
@@ -238,7 +238,7 @@ app.get('/p/:id', async (req, res) => {
       await kv.set(`paste:${id}`, JSON.stringify(paste));
     }
 
-    // Escape HTML content for safe rendering
+    
     const escapedContent = String(paste.content)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -304,7 +304,7 @@ app.get('/p/:id', async (req, res) => {
   }
 });
 
-// Serve index.html for root route
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
