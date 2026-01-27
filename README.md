@@ -1,5 +1,5 @@
 # Pastebin Application
-
+DEPLOYED LINK: https://pastebin-nu-azure.vercel.app/
 A simple, secure Pastebin-like application that allows users to create and share text pastes with optional time-based expiry and view count limits.
 
 ## Features
