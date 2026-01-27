@@ -1,0 +1,22 @@
+{
+  "name": "pastebin-app",
+  "version": "1.0.0",
+  "description": "A simple Pastebin-like application",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "node src/index.js",
+    "start": "node src/index.js"
+  },
+  "keywords": [
+    "pastebin",
+    "paste"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@vercel/kv": "^0.2.1",
+    "dotenv": "^17.2.3",
+    "express": "^4.18.2",
+    "nanoid": "^4.0.0"
+  }
+}
