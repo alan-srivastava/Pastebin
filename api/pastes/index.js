@@ -15,23 +15,46 @@ function parseKvData(data) {
 }
 
 module.exports = async function handler(req, res) {
-  // Set CORS headers
   res.setHeader('Content-Type', 'application/json');
 
   if (req.method === 'POST') {
-    const { content, ttl_seconds, max_views } = req.body;
+    // Parse JSON body
+    let body = '';
+    
+    await new Promise((resolve, reject) => {
+      req.on('data', chunk => {
+        body += chunk.toString();
+      });
+      req.on('end', resolve);
+      req.on('error', reject);
+    });
+
+    let parsedBody = {};
+    try {
+      if (body) {
+        parsedBody = JSON.parse(body);
+      }
+    } catch (e) {
+      res.statusCode = 400;
+      return res.end(JSON.stringify({ error: 'Invalid JSON' }));
+    }
+
+    const { content, ttl_seconds, max_views } = parsedBody;
 
     // Validation
     if (!content || typeof content !== 'string' || content.trim() === '') {
-      return res.status(400).json({ error: 'content is required and must be a non-empty string' });
+      res.statusCode = 400;
+      return res.end(JSON.stringify({ error: 'content is required and must be a non-empty string' }));
     }
 
     if (ttl_seconds !== undefined && (!Number.isInteger(ttl_seconds) || ttl_seconds < 1)) {
-      return res.status(400).json({ error: 'ttl_seconds must be an integer >= 1' });
+      res.statusCode = 400;
+      return res.end(JSON.stringify({ error: 'ttl_seconds must be an integer >= 1' }));
     }
 
     if (max_views !== undefined && (!Number.isInteger(max_views) || max_views < 1)) {
-      return res.status(400).json({ error: 'max_views must be an integer >= 1' });
+      res.statusCode = 400;
+      return res.end(JSON.stringify({ error: 'max_views must be an integer >= 1' }));
     }
 
     try {
@@ -62,15 +85,18 @@ module.exports = async function handler(req, res) {
         ? `https://${process.env.VERCEL_URL}`
         : `http://localhost:3000`;
 
-      return res.status(201).json({
+      res.statusCode = 201;
+      return res.end(JSON.stringify({
         id,
         url: `${appUrl}/p/${id}`,
-      });
+      }));
     } catch (error) {
       console.error('Error creating paste:', error);
-      return res.status(500).json({ error: 'Failed to create paste' });
+      res.statusCode = 500;
+      return res.end(JSON.stringify({ error: 'Failed to create paste' }));
     }
   } else {
-    return res.status(405).json({ error: 'Method not allowed' });
+    res.statusCode = 405;
+    return res.end(JSON.stringify({ error: 'Method not allowed' }));
   }
 };

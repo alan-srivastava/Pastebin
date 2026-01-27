@@ -9,9 +9,13 @@ module.exports = async function handler(req, res) {
   try {
     // Try to ping KV to ensure persistence layer is accessible
     await kv.ping();
-    return res.json({ ok: true });
+    res.setHeader('Content-Type', 'application/json');
+    res.statusCode = 200;
+    return res.end(JSON.stringify({ ok: true }));
   } catch (error) {
     console.error('Health check failed:', error);
-    return res.status(500).json({ ok: false });
+    res.setHeader('Content-Type', 'application/json');
+    res.statusCode = 500;
+    return res.end(JSON.stringify({ ok: false }));
   }
 };
