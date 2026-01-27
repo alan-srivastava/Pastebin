@@ -1,6 +1,6 @@
-export default function handler(req, res) {
+module.exports = function handler(req, res) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(`<!DOCTYPE html>
+  return res.status(200).send(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -379,4 +379,4 @@ export default function handler(req, res) {
   </script>
 </body>
 </html>`);
-}
+};

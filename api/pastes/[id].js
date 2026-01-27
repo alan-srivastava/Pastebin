@@ -13,7 +13,7 @@ function parseKvData(data) {
   return data;
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   const { id } = req.query;
 
   if (req.method !== 'GET') {
@@ -64,13 +64,13 @@ export default async function handler(req, res) {
       await kv.set(`paste:${id}`, JSON.stringify(paste));
     }
 
-    res.json({
+    return res.json({
       content: paste.content,
       remaining_views,
       expires_at: paste.expires_at ? new Date(paste.expires_at).toISOString() : null,
     });
   } catch (error) {
     console.error('Error fetching paste:', error);
-    res.status(500).json({ error: 'Failed to fetch paste' });
+    return res.status(500).json({ error: 'Failed to fetch paste' });
   }
-}
+};

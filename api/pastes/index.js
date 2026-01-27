@@ -14,7 +14,7 @@ function parseKvData(data) {
   return data;
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Content-Type', 'application/json');
 
@@ -62,15 +62,15 @@ export default async function handler(req, res) {
         ? `https://${process.env.VERCEL_URL}`
         : `http://localhost:3000`;
 
-      res.status(201).json({
+      return res.status(201).json({
         id,
         url: `${appUrl}/p/${id}`,
       });
     } catch (error) {
       console.error('Error creating paste:', error);
-      res.status(500).json({ error: 'Failed to create paste' });
+      return res.status(500).json({ error: 'Failed to create paste' });
     }
   } else {
-    res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
-}
+};

@@ -5,13 +5,13 @@ if (process.env.NODE_ENV !== 'production') {
 
 const { kv } = require('@vercel/kv');
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   try {
     // Try to ping KV to ensure persistence layer is accessible
     await kv.ping();
-    res.json({ ok: true });
+    return res.json({ ok: true });
   } catch (error) {
     console.error('Health check failed:', error);
-    res.status(500).json({ ok: false });
+    return res.status(500).json({ ok: false });
   }
-}
+};
