@@ -8,16 +8,20 @@
   ],
   "routes": [
     {
-      "src": "/api/pastes/?([a-zA-Z0-9_-]*)",
-      "dest": "/api/pastes/$1"
-    },
-    {
-      "src": "/p/([a-zA-Z0-9_-]+)",
-      "dest": "/api/p/$1"
-    },
-    {
       "src": "/api/healthz",
-      "dest": "/api/healthz"
+      "dest": "/api/healthz.js"
+    },
+    {
+      "src": "/api/pastes/([a-zA-Z0-9_-]+)$",
+      "dest": "/api/pastes/[id].js?id=$1"
+    },
+    {
+      "src": "/api/pastes/?$",
+      "dest": "/api/pastes/index.js"
+    },
+    {
+      "src": "/p/([a-zA-Z0-9_-]+)$",
+      "dest": "/api/p/[id].js?id=$1"
     },
     {
       "src": "/(.*)",
