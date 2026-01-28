@@ -17,14 +17,16 @@ module.exports = async function handler(req, res) {
   const { id } = req.query;
 
   if (req.method !== 'GET') {
-    return res.status(405).send('Method not allowed');
+    return res.status(405).end('Method not allowed');
   }
 
   try {
     const pasteJson = await kv.get(`paste:${id}`);
 
     if (!pasteJson) {
-      return res.status(404).send(`
+      res.statusCode = 404;
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.end(`
         <!DOCTYPE html>
         <html>
         <head>
@@ -54,7 +56,9 @@ module.exports = async function handler(req, res) {
     // Check if expired
     if (paste.expires_at && now > paste.expires_at) {
       await kv.del(`paste:${id}`);
-      return res.status(404).send(`
+      res.statusCode = 404;
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.end(`
         <!DOCTYPE html>
         <html>
         <head>
@@ -76,7 +80,9 @@ module.exports = async function handler(req, res) {
     // Check if view limit exceeded
     if (paste.max_views && paste.views_count >= paste.max_views) {
       await kv.del(`paste:${id}`);
-      return res.status(404).send(`
+      res.statusCode = 404;
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.end(`
         <!DOCTYPE html>
         <html>
         <head>
@@ -117,7 +123,7 @@ module.exports = async function handler(req, res) {
       .replace(/'/g, '&#x27;');
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(`
+    res.end(`
       <!DOCTYPE html>
       <html>
       <head>
@@ -155,7 +161,9 @@ module.exports = async function handler(req, res) {
     `);
   } catch (error) {
     console.error('Error viewing paste:', error);
-    res.status(500).send(`
+    res.statusCode = 500;
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.end(`
       <!DOCTYPE html>
       <html>
       <head>

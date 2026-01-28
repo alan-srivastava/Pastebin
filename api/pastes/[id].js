@@ -18,7 +18,8 @@ module.exports = async function handler(req, res) {
 
   if (req.method !== 'GET') {
     res.setHeader('Content-Type', 'application/json');
-    return res.status(405).json({ error: 'Method not allowed' });
+    res.statusCode = 405;
+    return res.end(JSON.stringify({ error: 'Method not allowed' }));
   }
 
   res.setHeader('Content-Type', 'application/json');
@@ -27,7 +28,8 @@ module.exports = async function handler(req, res) {
     const pasteJson = await kv.get(`paste:${id}`);
 
     if (!pasteJson) {
-      return res.status(404).json({ error: 'Paste not found' });
+      res.statusCode = 404;
+      return res.end(JSON.stringify({ error: 'Paste not found' }));
     }
 
     const paste = parseKvData(pasteJson);
@@ -41,13 +43,15 @@ module.exports = async function handler(req, res) {
     // Check if expired
     if (paste.expires_at && now > paste.expires_at) {
       await kv.del(`paste:${id}`);
-      return res.status(404).json({ error: 'Paste has expired' });
+      res.statusCode = 404;
+      return res.end(JSON.stringify({ error: 'Paste has expired' }));
     }
 
     // Check if view limit exceeded
     if (paste.max_views && paste.views_count >= paste.max_views) {
       await kv.del(`paste:${id}`);
-      return res.status(404).json({ error: 'View limit exceeded' });
+      res.statusCode = 404;
+      return res.end(JSON.stringify({ error: 'View limit exceeded' }));
     }
 
     // Increment view count
@@ -64,13 +68,14 @@ module.exports = async function handler(req, res) {
       await kv.set(`paste:${id}`, JSON.stringify(paste));
     }
 
-    return res.json({
+    return res.end(JSON.stringify({
       content: paste.content,
       remaining_views,
       expires_at: paste.expires_at ? new Date(paste.expires_at).toISOString() : null,
-    });
+    }));
   } catch (error) {
     console.error('Error fetching paste:', error);
-    return res.status(500).json({ error: 'Failed to fetch paste' });
+    res.statusCode = 500;
+    return res.end(JSON.stringify({ error: 'Failed to fetch paste' }));
   }
 };

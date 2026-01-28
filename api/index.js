@@ -1,6 +1,6 @@
 module.exports = function handler(req, res) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  return res.status(200).send(`<!DOCTYPE html>
+  res.end(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
