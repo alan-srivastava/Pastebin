@@ -2,10 +2,9 @@
   "name": "pastebin-app",
   "version": "1.0.0",
   "description": "A simple Pastebin-like application",
-  "main": "src/index.js",
   "scripts": {
-    "dev": "node src/index.js",
-    "start": "node src/index.js"
+    "dev": "vercel dev",
+    "start": "vercel dev"
   },
   "keywords": [
     "pastebin",
@@ -16,7 +15,6 @@
   "dependencies": {
     "@vercel/kv": "^0.2.1",
     "dotenv": "^17.2.3",
-    "express": "^4.18.2",
     "nanoid": "^3.3.7"
   },
   "devDependencies": {

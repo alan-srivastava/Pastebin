@@ -29,10 +29,17 @@ This application uses **Vercel KV** for persistence. Vercel KV is a serverless R
 
 ## Installation & Running Locally
 
+### Prerequisites
+- Node.js 16+ and npm installed
+- Vercel KV database credentials (from Vercel dashboard)
+- Vercel CLI (optional but recommended for local development)
+
+### Setup Steps
+
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
-   cd pastebin
+   git clone https://github.com/alan-srivastava/Pastebin.git
+   cd Pastebin
    ```
 
 2. **Install dependencies**
@@ -40,19 +47,33 @@ This application uses **Vercel KV** for persistence. Vercel KV is a serverless R
    npm install
    ```
 
-3. **Set up environment variables**
-   - Copy `.env.example` to `.env.local`
-   - Add your Vercel KV credentials:
-     ```
-     KV_REST_API_URL=https://your-project.kv.vercel.sh
-     KV_REST_API_TOKEN=your_token_here
-     ```
+3. **Create `.env.local` file with Vercel KV credentials**
+   ```bash
+   # In the project root, create or edit .env.local
+   KV_REST_API_URL=https://your-project.kv.vercel.sh
+   KV_REST_API_TOKEN=your_token_here
+   TEST_MODE=0
+   ```
+   
+   To get these credentials:
+   - Go to [Vercel Dashboard](https://vercel.com/dashboard)
+   - Select your project → Storage → Vercel KV
+   - Copy the `.env.local` content
 
-4. **Run locally**
+4. **Run the development server**
    ```bash
    npm run dev
    ```
    The application will start on `http://localhost:3000`
+   
+   You should see:
+   ```
+   > ▲ [4:20:35 PM] Ready! Available at http://localhost:3000
+   ```
+
+5. **Open your browser**
+   - Navigate to `http://localhost:3000`
+   - Start creating and sharing pastes!
 
 ## Deployment to Vercel
 
@@ -180,14 +201,26 @@ All responses are JSON formatted.
 ## Repository Structure
 
 ```
-pastebin/
-├── src/
-│   └── index.js           # Main Express application
-├── public/
-│   └── index.html         # UI for creating pastes
-├── package.json           # Dependencies
-├── vercel.json           # Vercel configuration
-├── .env.example          # Environment variable template
-├── .gitignore            # Git ignore rules
-└── README.md             # This file
+Pastebin/
+├── api/
+│   ├── index.js              # Home page handler (returns HTML UI)
+│   ├── healthz.js            # Health check endpoint
+│   ├── pastes/
+│   │   ├── index.js          # POST handler (create paste)
+│   │   └── [id].js           # GET handler (fetch paste JSON)
+│   └── p/
+│       └── [id].js           # GET handler (view paste as HTML)
+├── package.json              # Dependencies & scripts
+├── vercel.json              # Vercel deployment configuration
+├── .env.local               # Local environment variables (not committed)
+├── .gitignore               # Git ignore rules
+└── README.md                # This file
 ```
+
+## Technology Stack
+
+- **Runtime**: Node.js serverless functions on Vercel
+- **Database**: Vercel KV (Redis-compatible)
+- **Frontend**: HTML5, CSS3, Vanilla JavaScript
+- **Deployment**: Vercel (automatic from GitHub)
+- **ID Generation**: nanoid v3.3.7 (for unique paste URLs)
